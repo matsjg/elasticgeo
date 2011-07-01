@@ -78,20 +78,29 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
                 return null;
             }
             JSONObject hit = (JSONObject) data.get(row);
-            JSONObject source = (JSONObject) hit.get("_source");
+
+            JSONObject feature;
+            if (hit.has("_source")) {
+                feature = (JSONObject) hit.get("_source");
+            } else if(hit.has("fields")) {
+                feature = (JSONObject) hit.get("fields");
+            } else {
+                throw new IOException("No result found!");
+            }
+
             SimpleFeatureType type = getFeatureType();
             for (AttributeType attributeType : type.getTypes()) {
                 String propertyKey = attributeType.getName().getLocalPart();
-                if(source.has(propertyKey)) {
+                if(feature.has(propertyKey)) {
 
                     if (Point.class.equals(attributeType.getBinding())) {
                         Coordinate coordinate = new Coordinate();
-                        JSONObject point = (JSONObject) source.getJSONObject(propertyKey);
+                        JSONObject point = (JSONObject) feature.getJSONObject(propertyKey);
                         coordinate.y = point.getDouble("lat");
                         coordinate.x = point.getDouble("lon");
                         builder.set(propertyKey, geometryFactory.createPoint(coordinate));
                     } else {
-                        builder.set(propertyKey, source.get(propertyKey));
+                        builder.set(propertyKey, feature.get(propertyKey));
                     }
                 }
             }
