@@ -4,6 +4,7 @@ import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.GeometryFactory;
 import com.vividsolutions.jts.geom.Point;
 import org.geotools.data.FeatureReader;
+import org.geotools.data.Query;
 import org.geotools.data.store.ContentState;
 import org.geotools.feature.simple.SimpleFeatureBuilder;
 import org.geotools.geometry.jts.JTSFactoryFinder;
@@ -30,7 +31,7 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
     private GeometryFactory geometryFactory;
     JSONArray data;
 
-    public ElasticFeatureReader(ContentState contentState) throws IOException {
+    public ElasticFeatureReader(ContentState contentState, Query query) throws IOException {
         this.state = contentState;
         builder = new SimpleFeatureBuilder(state.getFeatureType());
         geometryFactory = JTSFactoryFinder.getGeometryFactory(null);
@@ -57,7 +58,7 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
     }
 
     public SimpleFeatureType getFeatureType() {
-        return (SimpleFeatureType) state.getFeatureType();
+        return state.getFeatureType();
     }
 
     public SimpleFeature next() throws IOException, IllegalArgumentException,
@@ -74,7 +75,7 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
 
     SimpleFeature readFeature() throws IOException {
         try {
-            if (row > data.length()-1) {
+            if (row > data.length() - 1) {
                 return null;
             }
             JSONObject hit = (JSONObject) data.get(row);
@@ -82,7 +83,7 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
             JSONObject feature;
             if (hit.has("_source")) {
                 feature = (JSONObject) hit.get("_source");
-            } else if(hit.has("fields")) {
+            } else if (hit.has("fields")) {
                 feature = (JSONObject) hit.get("fields");
             } else {
                 throw new IOException("No result found!");
@@ -91,7 +92,7 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
             SimpleFeatureType type = getFeatureType();
             for (AttributeType attributeType : type.getTypes()) {
                 String propertyKey = attributeType.getName().getLocalPart();
-                if(feature.has(propertyKey)) {
+                if (feature.has(propertyKey)) {
 
                     if (Point.class.equals(attributeType.getBinding())) {
                         Coordinate coordinate = new Coordinate();
@@ -105,7 +106,8 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
                 }
             }
         } catch (JSONException e) {
-            e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+            // todo fix this
+            e.printStackTrace();
         }
         return this.buildFeature();
     }
@@ -119,7 +121,7 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
         if (next != null) {
             return true;
         } else {
-            next = readFeature(); // read next feature so we can check
+            next = readFeature();
             return next != null;
         }
     }

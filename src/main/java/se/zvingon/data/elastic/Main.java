@@ -27,13 +27,13 @@ public class Main {
     public static void main(String[] args) throws IOException {
 
         Client client = new Client(Protocol.HTTP);
-        Response response = client.get("http://localhost:9200/hemnet/_mapping");
+        Response response = client.get("http://localhost:9200/xxx/_mapping");
         JsonRepresentation representation = new JsonRepresentation(response.getEntity());
         JSONObject parent = null;
         List<Name> types = new Vector<Name>();
         try {
             parent = representation.toJsonObject();
-            JSONObject index = parent.getJSONObject("hemnet");
+            JSONObject index = parent.getJSONObject("xxx");
             Iterator typeIter = index.keys();
             while (typeIter.hasNext()) {
                 String name = (String) typeIter.next();

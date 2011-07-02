@@ -8,17 +8,14 @@ import org.geotools.data.simple.SimpleFeatureIterator;
 import org.geotools.data.store.ContentEntry;
 import org.geotools.data.store.ContentFeatureCollection;
 import org.geotools.data.store.ContentFeatureStore;
-import org.geotools.factory.Hints;
 import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
 import org.geotools.geometry.jts.ReferencedEnvelope;
-import org.geotools.metadata.iso.citation.Citations;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
-import org.opengis.metadata.citation.Citation;
 import org.restlet.Client;
 import org.restlet.data.Protocol;
 import org.restlet.ext.json.JsonRepresentation;
@@ -34,7 +31,7 @@ public class ElasticFeatureSource extends ContentFeatureStore {
     }
 
     /**
-     * Access parent CSVDataStore
+     * Access parent datastore
      */
     public ElasticDataStore getDataStore() {
         return (ElasticDataStore) super.getDataStore();
@@ -42,7 +39,6 @@ public class ElasticFeatureSource extends ContentFeatureStore {
 
     /**
      * Implementation that generates the total bounds
-     * (many file formats record this information in the header)
      */
     protected ReferencedEnvelope getBoundsInternal(Query query) throws IOException {
         ReferencedEnvelope bounds = new ReferencedEnvelope(getSchema().getCoordinateReferenceSystem());
@@ -73,8 +69,7 @@ public class ElasticFeatureSource extends ContentFeatureStore {
 
     protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
             throws IOException {
-        // Note we ignore 'query' because querying/filtering is handled in superclasses.
-        return new ElasticFeatureReader(getState());
+        return new ElasticFeatureReader(getState(), query);
     }
 
     protected SimpleFeatureType buildFeatureType() throws IOException {
@@ -105,8 +100,8 @@ public class ElasticFeatureSource extends ContentFeatureStore {
                 String propertyKey = (String) propertyNameIter.next();
 
                 boolean shouldInclude = false;
-                for (int i=0; i < fields.length(); i++) {
-                    if(propertyKey.equals(fields.get(i))) {
+                for (int i = 0; i < fields.length(); i++) {
+                    if (propertyKey.equals(fields.get(i))) {
                         shouldInclude = true;
                         break;
                     }
@@ -118,7 +113,7 @@ public class ElasticFeatureSource extends ContentFeatureStore {
                 if (property.has("type")) {
                     String propertyType = property.getString("type");
                     if ("geo_point".equalsIgnoreCase(propertyType)) {
-                        builder.setCRS(DefaultGeographicCRS.WGS84); // <- Coordinate reference system
+                        builder.setCRS(DefaultGeographicCRS.WGS84);
                         builder.add(propertyKey, Point.class);
                         builder.setSRS("EPSG:4326");
                     }
@@ -131,16 +126,13 @@ public class ElasticFeatureSource extends ContentFeatureStore {
         } catch (JSONException e) {
             throw new IOException(e);
         }
-        // build the type (it is immutable and cannot be modified)
         final SimpleFeatureType SCHEMA = builder.buildFeatureType();
         return SCHEMA;
     }
 
     @Override
     protected FeatureWriter<SimpleFeatureType, SimpleFeature> getWriterInternal(Query query, int flags) throws IOException {
-        // TODO Perhaps: make separate writers for update and append.
-        throw new UnsupportedOperationException();
-        //return new CSVFeatureWriter(getState(), query, (flags | WRITER_ADD) == WRITER_ADD);
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
 }

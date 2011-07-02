@@ -8,7 +8,6 @@ import org.geotools.data.store.ContentDataStore;
 import org.geotools.data.store.ContentEntry;
 import org.geotools.data.store.ContentFeatureSource;
 import org.geotools.feature.NameImpl;
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.opengis.feature.simple.SimpleFeature;
@@ -20,7 +19,6 @@ import org.restlet.data.Response;
 import org.restlet.ext.json.JsonRepresentation;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
@@ -67,6 +65,8 @@ public class ElasticDataStore extends ContentDataStore {
     protected ContentFeatureSource createFeatureSource(ContentEntry entry) throws IOException {
         return new ElasticFeatureSource(entry, Query.ALL);
     }
+
+
 
     @Override
     public FeatureReader<SimpleFeatureType, SimpleFeature> getFeatureReader(Query query, Transaction tx) throws IOException {
