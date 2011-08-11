@@ -10,7 +10,8 @@ import java.util.Map;
 
 public class ElasticDataStoreFactory implements DataStoreFactorySpi {
 
-    public static final Param SEARCH_HOST = new Param("SearchUri", String.class, "Uri to elastic search host and index", true);
+    public static final Param HOSTNAME = new Param("SearchHost", String.class, "Hostname", true);
+    public static final Param HOSTPORT = new Param("SearchPort", Integer.class, "Port", true);
     public static final Param INDEX_NAME = new Param("Indexname", String.class, "name of index", true);
     public static final Param ESQUERY = new Param("Elasticsearch query", String.class, "Query to elastic search", false);
 
@@ -23,15 +24,16 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
     }
 
     public Param[] getParametersInfo() {
-        return new Param[]{SEARCH_HOST, INDEX_NAME, ESQUERY};
+        return new Param[]{HOSTNAME, HOSTPORT, INDEX_NAME, ESQUERY};
     }
 
     public boolean canProcess(Map<String, Serializable> params) {
         try {
-            String searchHost = (String) SEARCH_HOST.lookUp(params);
+            String searchHost = (String) HOSTNAME.lookUp(params);
             String indexName = (String) INDEX_NAME.lookUp(params);
+            Integer hostport = (Integer) HOSTPORT.lookUp(params);
             String query = (String) ESQUERY.lookUp(params);
-            if (searchHost != null && indexName != null) {
+            if (searchHost != null && hostport != null && indexName != null) {
                 return true;
             }
         } catch (IOException e) {
@@ -50,10 +52,11 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
 
     public DataStore createDataStore(Map<String, Serializable> params) throws IOException {
         System.out.println("createDataStore");
-        String searchHost = (String) SEARCH_HOST.lookUp(params);
+        String searchHost = (String) HOSTNAME.lookUp(params);
         String indexName = (String) INDEX_NAME.lookUp(params);
+        Integer hostPort = (Integer) HOSTPORT.lookUp(params);
         String query = (String) ESQUERY.lookUp(params);
-        return new ElasticDataStore(searchHost, indexName, query);
+        return new ElasticDataStore(searchHost, hostPort, indexName, query);
     }
 
     public DataStore createNewDataStore(Map<String, Serializable> params) throws IOException {

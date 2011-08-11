@@ -24,7 +24,6 @@
         </plugins>
     </build>
 
-
     <properties>
         <geotools.version>2.7.2</geotools.version>
         <!--geotools.version>8.0-M0</geotools.version-->
@@ -47,15 +46,28 @@
             <version>${geotools.version}</version>
         </dependency>
 
+         <dependency>
+            <groupId>org.geotools</groupId>
+            <artifactId>gt-jdbc</artifactId>
+            <version>${geotools.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>com.noelios.restlet</groupId>
             <artifactId>com.noelios.restlet.ext.httpclient</artifactId>
             <version>1.0.8</version>
         </dependency>
+
         <dependency>
             <groupId>org.restlet</groupId>
             <artifactId>org.restlet.ext.json</artifactId>
             <version>1.0.8</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.elasticsearch</groupId>
+            <artifactId>elasticsearch</artifactId>
+            <version>0.17.4</version>
         </dependency>
 
 

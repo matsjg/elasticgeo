@@ -1,6 +1,16 @@
 // header start
 package se.zvingon.data.elastic;
 
+import com.sun.tools.javadoc.TypeMaker;
+import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
+import org.elasticsearch.client.Requests;
+import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.metadata.MappingMetaData;
+import org.elasticsearch.common.collect.ImmutableMap;
+import org.elasticsearch.common.transport.InetSocketTransportAddress;
+import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.common.xcontent.XContentParser;
 import org.geotools.data.FeatureReader;
 import org.geotools.data.Query;
 import org.geotools.data.Transaction;
@@ -13,6 +23,7 @@ import org.json.JSONObject;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
 import org.opengis.feature.type.Name;
+import org.opengis.metadata.MetaData;
 import org.restlet.Client;
 import org.restlet.data.Protocol;
 import org.restlet.data.Response;
@@ -21,6 +32,7 @@ import org.restlet.ext.json.JsonRepresentation;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Vector;
 
 public class ElasticDataStore extends ContentDataStore {
@@ -30,9 +42,11 @@ public class ElasticDataStore extends ContentDataStore {
     String searchHost;
     String indexName;
     String query;
+    Integer hostPort;
 
-    public ElasticDataStore(String searchHost, String indexName, String query) {
+    public ElasticDataStore(String searchHost, Integer hostPort, String indexName, String query) {
         this.searchHost = searchHost;
+        this.hostPort = hostPort;
         this.indexName = indexName;
         this.query = query;
     }
@@ -40,21 +54,18 @@ public class ElasticDataStore extends ContentDataStore {
     // createTypeNames start
     @Override
     protected List<Name> createTypeNames() throws IOException {
-        // todo hämta index från elastic search
-        Client client = new Client(Protocol.HTTP);
-        Response response = client.get(searchHost + "/_mapping");
-        JsonRepresentation representation = new JsonRepresentation(response.getEntity());
-        JSONObject parent = null;
+        TransportClient client = new TransportClient().addTransportAddress(new InetSocketTransportAddress(searchHost, hostPort));
+        ClusterStateRequest clusterStateRequest = Requests.clusterStateRequest()
+                .filterRoutingTable(true)
+                .filterNodes(true)
+                .filteredIndices(indexName);
+
+        ClusterState state = client.admin().cluster().state(clusterStateRequest).actionGet().getState();
+        Map<String, MappingMetaData> mappings = state.metaData().index(indexName).mappings();
+        Iterator<String> elasticTypes = mappings.keySet().iterator();
         List<Name> types = new Vector<Name>();
-        try {
-            parent = representation.toJsonObject();
-            JSONObject index = parent.getJSONObject(indexName);
-            Iterator typeIter = index.keys();
-            while (typeIter.hasNext()) {
-                types.add(new NameImpl((String) typeIter.next()));
-            }
-        } catch (JSONException e) {
-            throw new IOException(e);
+        while (elasticTypes.hasNext()) {
+            types.add(new NameImpl(elasticTypes.next()));
         }
         return types;
     }
@@ -67,11 +78,10 @@ public class ElasticDataStore extends ContentDataStore {
     }
 
 
-
     @Override
     public FeatureReader<SimpleFeatureType, SimpleFeature> getFeatureReader(Query query, Transaction tx) throws IOException {
         // todo use query?
-        return super.getFeatureReader(query, tx);    //To change body of overridden methods use File | Settings | File Templates.
+        return super.getFeatureReader(query, tx);
     }
 
 }

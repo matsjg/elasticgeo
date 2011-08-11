@@ -1,6 +1,14 @@
 package se.zvingon.data.elastic;
 
 import com.vividsolutions.jts.geom.Point;
+import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
+import org.elasticsearch.client.Requests;
+import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.metadata.MappingMetaData;
+import org.elasticsearch.common.transport.InetSocketTransportAddress;
+import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.common.xcontent.XContentParser;
 import org.geotools.data.FeatureReader;
 import org.geotools.data.FeatureWriter;
 import org.geotools.data.Query;
@@ -11,17 +19,14 @@ import org.geotools.data.store.ContentFeatureStore;
 import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
 import org.geotools.geometry.jts.ReferencedEnvelope;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
-import org.restlet.Client;
-import org.restlet.data.Protocol;
-import org.restlet.ext.json.JsonRepresentation;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Map;
 
 @SuppressWarnings("unchecked")
 public class ElasticFeatureSource extends ContentFeatureStore {
@@ -35,6 +40,11 @@ public class ElasticFeatureSource extends ContentFeatureStore {
      */
     public ElasticDataStore getDataStore() {
         return (ElasticDataStore) super.getDataStore();
+    }
+
+    @Override
+    protected boolean canFilter() {
+        return true;
     }
 
     /**
@@ -56,6 +66,7 @@ public class ElasticFeatureSource extends ContentFeatureStore {
     }
 
     protected int getCountInternal(Query query) throws IOException {
+        // todo perform a count query on elasticsearch, based on query
         ContentFeatureCollection cfc = this.getFeatures(query);
         int count = 0;
         SimpleFeatureIterator iter = cfc.features();
@@ -79,39 +90,36 @@ public class ElasticFeatureSource extends ContentFeatureStore {
 
         ElasticDataStore dataStore = getDataStore();
 
-        Client client = new Client(Protocol.HTTP);
-        String mappingUri = dataStore.searchHost + "/" + dataStore.indexName + "/" + entry.getName().getLocalPart() + "/_mapping";
-        System.out.println("Calling: " + mappingUri);
-        org.restlet.data.Response response = client.get(mappingUri);
-        JsonRepresentation representation = new JsonRepresentation(response.getEntity());
-        JSONObject parent = null;
-        try {
-            JSONObject query = new JSONObject(dataStore.query);
-            JSONArray fields = new JSONArray();
-            if (query.has("fields")) {
-                fields = query.getJSONArray("fields");
-            }
+        TransportClient client = new TransportClient().addTransportAddress(new InetSocketTransportAddress(dataStore.searchHost, dataStore.hostPort));
 
-            parent = representation.toJsonObject();
-            JSONObject type = parent.getJSONObject(entry.getName().getLocalPart());
-            JSONObject properties = type.getJSONObject("properties");
-            Iterator propertyNameIter = properties.keys();
+        ClusterStateRequest clusterStateRequest = Requests.clusterStateRequest()
+                .filterRoutingTable(true)
+                .filterNodes(true)
+                .filteredIndices(dataStore.indexName);
+
+        ClusterState state = client.admin().cluster().state(clusterStateRequest).actionGet().getState();
+        MappingMetaData metadata = state.metaData().index(dataStore.indexName).mapping(entry.getName().getLocalPart());
+
+        byte[] mappingSource = metadata.source().uncompressed();
+        XContentParser parser = XContentFactory.xContent(mappingSource).createParser(mappingSource);
+        Map<String, Object> mapping = parser.map();
+        if (mapping.size() == 1 && mapping.containsKey(entry.getName().getLocalPart())) {
+            // the type name is the root value, reduce it
+            mapping = (Map<String, Object>) mapping.get(entry.getName().getLocalPart());
+        }
+
+        if (mapping.containsKey("properties")) {
+            Map<String, Map<String, Object>> properties = (Map<String, Map<String, Object>>) mapping.get("properties");
+            Iterator propertyNameIter = properties.keySet().iterator();
+
             while (propertyNameIter.hasNext()) {
                 String propertyKey = (String) propertyNameIter.next();
 
-                boolean shouldInclude = false;
-                for (int i = 0; i < fields.length(); i++) {
-                    if (propertyKey.equals(fields.get(i))) {
-                        shouldInclude = true;
-                        break;
-                    }
-                }
-                if (!shouldInclude) {
-                    continue;
-                }
-                JSONObject property = properties.getJSONObject(propertyKey);
-                if (property.has("type")) {
-                    String propertyType = property.getString("type");
+                Map<String, Object> property = properties.get(propertyKey);
+
+                if(property.containsKey("type")) {
+                    String propertyType = (String) property.get("type");
+
                     if ("geo_point".equalsIgnoreCase(propertyType)) {
                         builder.setCRS(DefaultGeographicCRS.WGS84);
                         builder.add(propertyKey, Point.class);
@@ -122,17 +130,14 @@ public class ElasticFeatureSource extends ContentFeatureStore {
                     }
                 }
             }
-
-        } catch (JSONException e) {
-            throw new IOException(e);
         }
-        final SimpleFeatureType SCHEMA = builder.buildFeatureType();
-        return SCHEMA;
-    }
+    final SimpleFeatureType SCHEMA = builder.buildFeatureType();
+    return SCHEMA;
+}
 
     @Override
     protected FeatureWriter<SimpleFeatureType, SimpleFeature> getWriterInternal(Query query, int flags) throws IOException {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return null;
     }
 
 }
