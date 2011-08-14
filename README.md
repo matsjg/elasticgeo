@@ -45,9 +45,9 @@ mvn dependency:copy-dependencies
 
 cd target/dependency
 
-cp lucene-* /Users/mats/Projects/geoserver-2.1.1/webapps/geoserver/WEB-INF/lib/
+cp lucene-* {GEOSERVER_HOME}/webapps/geoserver/WEB-INF/lib/
 
-cp elasticsearch-0.17.4.jar /Users/mats/Projects/geoserver-2.1.1/webapps/geoserver/WEB-INF/lib/
+cp elasticsearch-0.17.4.jar {GEOSERVER_HOME}/webapps/geoserver/WEB-INF/lib/
 
 
 
