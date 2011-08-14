@@ -1,5 +1,6 @@
 package se.zvingon.data.elastic;
 
+import org.elasticsearch.cluster.ClusterName;
 import org.geotools.data.DataStore;
 import org.geotools.data.DataStoreFactorySpi;
 
@@ -12,9 +13,12 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
 
     public static final Param HOSTNAME = new Param("SearchHost", String.class, "Hostname", true);
     public static final Param HOSTPORT = new Param("SearchPort", Integer.class, "Port", true);
+
     public static final Param INDEX_NAME = new Param("Indexname", String.class, "name of index", true);
     public static final Param ESQUERY = new Param("Elasticsearch query", String.class, "Query to elastic search", false);
-
+    public static final Param LOCAL_NODE = new Param("Use Elasticsearch local node", Boolean.class, "Use local node", false);
+    public static final Param CLUSTERNAME = new Param("Cluster name", String.class, "Attach local node to cluster with name", false);
+    public static final Param STORE_DATA = new Param("Store data in local node", Boolean.class, "Store data in local node", false);
     public String getDisplayName() {
         return "ElasticSearch";
     }
@@ -24,7 +28,7 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
     }
 
     public Param[] getParametersInfo() {
-        return new Param[]{HOSTNAME, HOSTPORT, INDEX_NAME, ESQUERY};
+        return new Param[]{HOSTNAME, HOSTPORT, INDEX_NAME, CLUSTERNAME, ESQUERY, LOCAL_NODE, STORE_DATA};
     }
 
     public boolean canProcess(Map<String, Serializable> params) {
@@ -54,9 +58,17 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
         System.out.println("createDataStore");
         String searchHost = (String) HOSTNAME.lookUp(params);
         String indexName = (String) INDEX_NAME.lookUp(params);
+        String clusterName = (String) CLUSTERNAME.lookUp(params);
         Integer hostPort = (Integer) HOSTPORT.lookUp(params);
         String query = (String) ESQUERY.lookUp(params);
-        return new ElasticDataStore(searchHost, hostPort, indexName, query);
+        Boolean storeData = (Boolean) STORE_DATA.lookUp(params);
+        if (storeData == null)
+            storeData = false;
+        Boolean localNode = (Boolean) LOCAL_NODE.lookUp(params);
+        if (localNode == null)
+            localNode = false;
+
+        return new ElasticDataStore(searchHost, hostPort, indexName, clusterName, query, localNode, storeData);
     }
 
     public DataStore createNewDataStore(Map<String, Serializable> params) throws IOException {

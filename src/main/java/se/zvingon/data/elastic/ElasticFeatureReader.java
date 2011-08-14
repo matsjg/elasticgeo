@@ -14,6 +14,7 @@ import org.elasticsearch.index.query.FilterBuilder;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
+import org.geotools.data.DataStore;
 import org.geotools.data.FeatureReader;
 import org.geotools.data.Query;
 import org.geotools.data.store.ContentState;
@@ -57,12 +58,10 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
     private long nbrOfResponses;
     private int internalIndex;
     private Client searchClient;
-    private Node searchNode;
+
 
     public ElasticFeatureReader(ContentState contentState, Query query) throws IOException {
 
-        searchNode = nodeBuilder().local(true).data(false).node();
-        searchClient = searchNode.client();
 
         this.state = contentState;
         builder = new SimpleFeatureBuilder(state.getFeatureType());
@@ -70,6 +69,8 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
         row = 1;
         internalIndex = 1;
         dataStore = (ElasticDataStore) contentState.getEntry().getDataStore();
+        searchClient = dataStore.elasticSearchNode.client();
+
 
         Filter filter = query.getFilter();
         FilterVisitor visitor = ExtractBoundsFilterVisitor.BOUNDS_VISITOR;
@@ -183,8 +184,9 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
         builder = null;
         geometryFactory = null;
         next = null;
+        client.close();
         client = null;
-        searchNode.close();
+        searchClient.close();
         searchClient = null;
         searchHitIterator = null;
         response = null;
