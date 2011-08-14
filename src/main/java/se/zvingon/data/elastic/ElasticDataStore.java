@@ -2,11 +2,13 @@
 package se.zvingon.data.elastic;
 
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
+import org.elasticsearch.client.Client;
 import org.elasticsearch.client.Requests;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.MappingMetaData;
+import org.elasticsearch.common.collect.ImmutableList;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
@@ -42,43 +44,62 @@ public class ElasticDataStore extends ContentDataStore {
     boolean storeData;
     Node elasticSearchNode;
     private String clusterName;
+    Client elasticSearchClient;
+    ImmutableList<Name> cachedTypeNames;
 
-    public ElasticDataStore(String searchHost, Integer hostPort, String indexName, String clusterName, String query, boolean localNode, boolean storeData) {
+    public ElasticDataStore(String searchHost,
+                            Integer hostPort,
+                            String indexName,
+                            String clusterName,
+                            boolean localNode,
+                            boolean storeData) {
         this.searchHost = searchHost;
         this.hostPort = hostPort;
         this.indexName = indexName;
-        this.query = query;
         this.localNode = localNode;
         this.storeData = storeData;
         this.clusterName = clusterName;
-        if (localNode)
-            initLocalNode();
+        if (localNode) {
+            initLocalNodeAndClient();
+        } else {
+            initTransportClient();
+        }
+        cacheTypeNames();
     }
 
-    private void initLocalNode() {
+    private void initLocalNodeAndClient() {
         NodeBuilder nodeBuilder = nodeBuilder().data(storeData).local(false).client(false).clusterName(clusterName);
         this.elasticSearchNode = nodeBuilder.build();
         elasticSearchNode.start();
+        this.elasticSearchClient = elasticSearchNode.client();
     }
 
-    // createTypeNames start
-    @Override
-    protected List<Name> createTypeNames() throws IOException {
-        System.out.println("Create Type Names");
-        TransportClient client = new TransportClient().addTransportAddress(new InetSocketTransportAddress(searchHost, hostPort));
+    private void initTransportClient() {
+        this.elasticSearchClient = new TransportClient().addTransportAddress(new InetSocketTransportAddress(searchHost, hostPort));
+    }
+
+    private void cacheTypeNames() {
         ClusterStateRequest clusterStateRequest = Requests.clusterStateRequest()
                 .filterRoutingTable(true)
                 .filterNodes(true)
                 .filteredIndices(indexName);
 
-        ClusterState state = client.admin().cluster().state(clusterStateRequest).actionGet().getState();
+        ClusterState state = elasticSearchClient.admin().cluster().state(clusterStateRequest).actionGet().getState();
         Map<String, MappingMetaData> mappings = state.metaData().index(indexName).mappings();
         Iterator<String> elasticTypes = mappings.keySet().iterator();
-        List<Name> types = new Vector<Name>();
+        Vector names = new Vector<Name>();
         while (elasticTypes.hasNext()) {
-            types.add(new NameImpl(elasticTypes.next()));
+            names.add(new NameImpl(elasticTypes.next()));
         }
-        return types;
+        cachedTypeNames = ImmutableList.copyOf(names);
+    }
+
+
+
+    // createTypeNames start
+    @Override
+    protected List<Name> createTypeNames() throws IOException {
+        return this.cachedTypeNames;
     }
     // createTypeNames end
 
@@ -97,6 +118,7 @@ public class ElasticDataStore extends ContentDataStore {
 
     @Override
     public void dispose() {
+        this.elasticSearchClient.close();
         this.elasticSearchNode.stop();
         this.elasticSearchNode.close();
         super.dispose();

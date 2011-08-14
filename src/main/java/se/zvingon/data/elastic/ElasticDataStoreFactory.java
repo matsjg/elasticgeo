@@ -15,7 +15,6 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
     public static final Param HOSTPORT = new Param("SearchPort", Integer.class, "Port", true);
 
     public static final Param INDEX_NAME = new Param("Indexname", String.class, "name of index", true);
-    public static final Param ESQUERY = new Param("Elasticsearch query", String.class, "Query to elastic search", false);
     public static final Param LOCAL_NODE = new Param("Use Elasticsearch local node", Boolean.class, "Use local node", false);
     public static final Param CLUSTERNAME = new Param("Cluster name", String.class, "Attach local node to cluster with name", false);
     public static final Param STORE_DATA = new Param("Store data in local node", Boolean.class, "Store data in local node", false);
@@ -28,7 +27,7 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
     }
 
     public Param[] getParametersInfo() {
-        return new Param[]{HOSTNAME, HOSTPORT, INDEX_NAME, CLUSTERNAME, ESQUERY, LOCAL_NODE, STORE_DATA};
+        return new Param[]{HOSTNAME, HOSTPORT, INDEX_NAME, CLUSTERNAME, LOCAL_NODE, STORE_DATA};
     }
 
     public boolean canProcess(Map<String, Serializable> params) {
@@ -36,7 +35,6 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
             String searchHost = (String) HOSTNAME.lookUp(params);
             String indexName = (String) INDEX_NAME.lookUp(params);
             Integer hostport = (Integer) HOSTPORT.lookUp(params);
-            String query = (String) ESQUERY.lookUp(params);
             if (searchHost != null && hostport != null && indexName != null) {
                 return true;
             }
@@ -60,7 +58,6 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
         String indexName = (String) INDEX_NAME.lookUp(params);
         String clusterName = (String) CLUSTERNAME.lookUp(params);
         Integer hostPort = (Integer) HOSTPORT.lookUp(params);
-        String query = (String) ESQUERY.lookUp(params);
         Boolean storeData = (Boolean) STORE_DATA.lookUp(params);
         if (storeData == null)
             storeData = false;
@@ -68,7 +65,7 @@ public class ElasticDataStoreFactory implements DataStoreFactorySpi {
         if (localNode == null)
             localNode = false;
 
-        return new ElasticDataStore(searchHost, hostPort, indexName, clusterName, query, localNode, storeData);
+        return new ElasticDataStore(searchHost, hostPort, indexName, clusterName, localNode, storeData);
     }
 
     public DataStore createNewDataStore(Map<String, Serializable> params) throws IOException {

@@ -4,17 +4,11 @@ import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.GeometryFactory;
 import com.vividsolutions.jts.geom.Point;
-import org.elasticsearch.action.ListenableActionFuture;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
-import org.elasticsearch.client.Client;
-import org.elasticsearch.client.transport.TransportClient;
-import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.index.query.FilterBuilder;
-import org.elasticsearch.node.Node;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
-import org.geotools.data.DataStore;
 import org.geotools.data.FeatureReader;
 import org.geotools.data.Query;
 import org.geotools.data.store.ContentState;
@@ -30,14 +24,13 @@ import org.opengis.filter.FilterVisitor;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 
 import static org.elasticsearch.index.query.FilterBuilders.geoBoundingBoxFilter;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
-import static org.elasticsearch.node.NodeBuilder.*;
 
 
 public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, SimpleFeature> {
@@ -47,46 +40,33 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
     protected SimpleFeatureBuilder builder;
     private int row;
     private GeometryFactory geometryFactory;
-    SearchHit[] data;
     ElasticDataStore dataStore;
     long count = 0;
-    Client client;
     SearchResponse response;
     Iterator<SearchHit> searchHitIterator;
-
-    Vector<ListenableActionFuture<SearchResponse>> responses = new Vector<ListenableActionFuture<SearchResponse>>();
-    private long nbrOfResponses;
-    private int internalIndex;
-    private Client searchClient;
-
 
     public ElasticFeatureReader(ContentState contentState, Query query) throws IOException {
 
 
         this.state = contentState;
-        builder = new SimpleFeatureBuilder(state.getFeatureType());
+        SimpleFeatureType type = state.getFeatureType();
+        builder = new SimpleFeatureBuilder(type);
         geometryFactory = JTSFactoryFinder.getGeometryFactory(null);
         row = 1;
-        internalIndex = 1;
         dataStore = (ElasticDataStore) contentState.getEntry().getDataStore();
-        searchClient = dataStore.elasticSearchNode.client();
-
 
         Filter filter = query.getFilter();
         FilterVisitor visitor = ExtractBoundsFilterVisitor.BOUNDS_VISITOR;
         Envelope result = (Envelope) filter.accept(visitor, DefaultGeographicCRS.WGS84);
         System.out.println("Read based on envelope: " + result.toString());
 
-        client = new TransportClient().addTransportAddress(new InetSocketTransportAddress(dataStore.searchHost, dataStore.hostPort));
-
         FilterBuilder geoFilter = geoBoundingBoxFilter("location")
                 .topLeft(result.getMaxY(), result.getMinX())
                 .bottomRight(result.getMinY(), result.getMaxX())
                 .cache(true);
         try {
-            SearchResponse countRequest = client.prepareSearch(dataStore.indexName)
+            SearchResponse countRequest = dataStore.elasticSearchClient.prepareSearch(dataStore.indexName)
                     .setTypes(dataStore.getTypeNames())
-                    .addFields("objekt_id", "objekttyp_id", "location")
                     .setSearchType(SearchType.COUNT)
                     .setQuery(matchAllQuery())
                     .setFilter(geoFilter)
@@ -95,18 +75,26 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
             count = countRequest.getHits().getTotalHits();
 
             System.out.println("Found " + count + " features matching bbox");
+            System.out.println("Trying to retrieve: ");
 
-            response = searchClient.prepareSearch(dataStore.indexName)
+            List<AttributeType> attributes = type.getTypes();
+            String[] fields = new String[attributes.size()];
+            for (int i = 0; i < attributes.size(); i++) {
+                fields[i] = attributes.get(i).getName().getLocalPart();
+                System.out.print(fields[i] + " ");
+            }
+
+
+            response = dataStore.elasticSearchClient.prepareSearch(dataStore.indexName)
                     .setTypes(dataStore.getTypeNames())
                     .setQuery(matchAllQuery())
                     .setFilter(geoFilter)
                     .setFrom(0)
                     .setSize(new Long(count).intValue())
-                    .addFields("objekt_id", "objekttyp_id", "location")
+                    .addFields(fields)
                     .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
                     .execute().get();
 
-            //new Long(count).intValue()
             System.out.println(response.hits().getTotalHits());
             searchHitIterator = response.getHits().iterator();
         } catch (InterruptedException e) {
@@ -159,11 +147,15 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
                         builder.set(propertyKey, geometryFactory.createPoint(coordinate));
                     }
                 } else {
-                    builder.set(propertyKey, field.getValue().toString());
+                    Object value = field.getValue();
+                    if (value != null) {
+                        builder.set(propertyKey, value);
+                    }
+
                 }
             }
         }
-       return this.buildFeature();
+        return this.buildFeature();
     }
 
     protected SimpleFeature buildFeature() {
@@ -184,10 +176,6 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
         builder = null;
         geometryFactory = null;
         next = null;
-        client.close();
-        client = null;
-        searchClient.close();
-        searchClient = null;
         searchHitIterator = null;
         response = null;
     }

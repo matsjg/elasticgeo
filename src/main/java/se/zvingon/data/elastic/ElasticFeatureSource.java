@@ -1,7 +1,10 @@
 package se.zvingon.data.elastic;
 
+import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Point;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Requests;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.ClusterState;
@@ -9,6 +12,8 @@ import org.elasticsearch.cluster.metadata.MappingMetaData;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentParser;
+import org.elasticsearch.index.query.FilterBuilder;
+import org.geotools.data.DataStore;
 import org.geotools.data.FeatureReader;
 import org.geotools.data.FeatureWriter;
 import org.geotools.data.Query;
@@ -17,16 +22,23 @@ import org.geotools.data.store.ContentEntry;
 import org.geotools.data.store.ContentFeatureCollection;
 import org.geotools.data.store.ContentFeatureStore;
 import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
+import org.geotools.filter.visitor.ExtractBoundsFilterVisitor;
 import org.geotools.geometry.jts.ReferencedEnvelope;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
+import org.opengis.filter.Filter;
+import org.opengis.filter.FilterVisitor;
 
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+
+import static org.elasticsearch.index.query.FilterBuilders.geoBoundingBoxFilter;
+import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 
 @SuppressWarnings("unchecked")
 public class ElasticFeatureSource extends ContentFeatureStore {
@@ -66,20 +78,36 @@ public class ElasticFeatureSource extends ContentFeatureStore {
     }
 
     protected int getCountInternal(Query query) throws IOException {
-        // todo perform a count query on elasticsearch, based on query
-        ContentFeatureCollection cfc = this.getFeatures(query);
-        int count = 0;
-        SimpleFeatureIterator iter = cfc.features();
-        while (iter.hasNext()) {
-            iter.next();
-            count++;
+        System.out.println("getCountInternal");
+        ElasticDataStore dataStore = getDataStore();
+        Filter filter = query.getFilter();
+        FilterVisitor visitor = ExtractBoundsFilterVisitor.BOUNDS_VISITOR;
+        Envelope result = (Envelope) filter.accept(visitor, DefaultGeographicCRS.WGS84);
+
+        FilterBuilder geoFilter = geoBoundingBoxFilter("location")
+                .topLeft(result.getMaxY(), result.getMinX())
+                .bottomRight(result.getMinY(), result.getMaxX())
+                .cache(true);
+
+        SearchResponse countRequest = null;
+        try {
+            countRequest = dataStore.elasticSearchClient.prepareSearch(dataStore.indexName)
+                    .setTypes(dataStore.getTypeNames())
+                    .setSearchType(SearchType.COUNT)
+                    .setQuery(matchAllQuery())
+                    .setFilter(geoFilter)
+                    .execute().get();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
         }
-        iter.close();
-        return count;
+        return new Long(countRequest.getHits().getTotalHits()).intValue();
     }
 
     protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
             throws IOException {
+        System.out.println("getReaderInternal");
         return new ElasticFeatureReader(getState(), query);
     }
 
@@ -90,14 +118,12 @@ public class ElasticFeatureSource extends ContentFeatureStore {
 
         ElasticDataStore dataStore = getDataStore();
 
-        TransportClient client = new TransportClient().addTransportAddress(new InetSocketTransportAddress(dataStore.searchHost, dataStore.hostPort));
-
         ClusterStateRequest clusterStateRequest = Requests.clusterStateRequest()
                 .filterRoutingTable(true)
                 .filterNodes(true)
                 .filteredIndices(dataStore.indexName);
 
-        ClusterState state = client.admin().cluster().state(clusterStateRequest).actionGet().getState();
+        ClusterState state = dataStore.elasticSearchClient.admin().cluster().state(clusterStateRequest).actionGet().getState();
         MappingMetaData metadata = state.metaData().index(dataStore.indexName).mapping(entry.getName().getLocalPart());
 
         byte[] mappingSource = metadata.source().uncompressed();
@@ -132,6 +158,7 @@ public class ElasticFeatureSource extends ContentFeatureStore {
             }
         }
     final SimpleFeatureType SCHEMA = builder.buildFeatureType();
+    System.out.println("buildFeatureType:" + SCHEMA.toString());
     return SCHEMA;
 }
 
