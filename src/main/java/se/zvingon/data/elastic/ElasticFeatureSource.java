@@ -136,14 +136,14 @@ public class ElasticFeatureSource extends ContentFeatureStore {
 
         if (mapping.containsKey("properties")) {
             Map<String, Map<String, Object>> properties = (Map<String, Map<String, Object>>) mapping.get("properties");
-            Iterator propertyNameIter = properties.keySet().iterator();
 
-            while (propertyNameIter.hasNext()) {
-                String propertyKey = (String) propertyNameIter.next();
+            for (String propertyKey : properties.keySet()) {
+                if(dataStore.useFields && !dataStore.getFields().contains(propertyKey))
+                    continue;
 
                 Map<String, Object> property = properties.get(propertyKey);
 
-                if(property.containsKey("type")) {
+                if (property.containsKey("type")) {
                     String propertyType = (String) property.get("type");
 
                     if ("geo_point".equalsIgnoreCase(propertyType)) {
@@ -153,6 +153,21 @@ public class ElasticFeatureSource extends ContentFeatureStore {
                     }
                     if ("string".equalsIgnoreCase(propertyType)) {
                         builder.add(propertyKey, String.class);
+                    }
+                    if ("integer".equalsIgnoreCase(propertyType)) {
+                        builder.add(propertyKey, Integer.class);
+                    }
+                    if ("long".equalsIgnoreCase(propertyType)) {
+                        builder.add(propertyKey, Long.class);
+                    }
+                    if ("float".equalsIgnoreCase(propertyType)) {
+                        builder.add(propertyKey, Float.class);
+                    }
+                    if ("double".equalsIgnoreCase(propertyType)) {
+                        builder.add(propertyKey, Double.class);
+                    }
+                    if ("boolean".equalsIgnoreCase(propertyType)) {
+                        builder.add(propertyKey, Boolean.class);
                     }
                 }
             }

@@ -5,7 +5,6 @@ import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.Requests;
 import org.elasticsearch.client.transport.TransportClient;
-import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.MappingMetaData;
 import org.elasticsearch.common.collect.ImmutableList;
@@ -46,19 +45,26 @@ public class ElasticDataStore extends ContentDataStore {
     private String clusterName;
     Client elasticSearchClient;
     ImmutableList<Name> cachedTypeNames;
+    List<String> fields;
+    boolean useFields;
 
     public ElasticDataStore(String searchHost,
                             Integer hostPort,
                             String indexName,
                             String clusterName,
                             boolean localNode,
-                            boolean storeData) {
+                            boolean storeData,
+                            List<String> fields) {
         this.searchHost = searchHost;
         this.hostPort = hostPort;
         this.indexName = indexName;
         this.localNode = localNode;
         this.storeData = storeData;
         this.clusterName = clusterName;
+        this.fields = fields;
+        if (fields != null && fields.size() > 0) {
+            useFields = true;
+        }
         if (localNode) {
             initLocalNodeAndClient();
         } else {
@@ -95,7 +101,6 @@ public class ElasticDataStore extends ContentDataStore {
     }
 
 
-
     // createTypeNames start
     @Override
     protected List<Name> createTypeNames() throws IOException {
@@ -122,5 +127,9 @@ public class ElasticDataStore extends ContentDataStore {
         this.elasticSearchNode.stop();
         this.elasticSearchNode.close();
         super.dispose();
+    }
+
+    public List<String> getFields() {
+        return fields;
     }
 }

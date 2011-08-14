@@ -78,12 +78,11 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
             System.out.println("Trying to retrieve: ");
 
             List<AttributeType> attributes = type.getTypes();
-            String[] fields = new String[attributes.size()];
+            String[] fields = new String[type.getTypes().size()];
             for (int i = 0; i < attributes.size(); i++) {
                 fields[i] = attributes.get(i).getName().getLocalPart();
                 System.out.print(fields[i] + " ");
             }
-
 
             response = dataStore.elasticSearchClient.prepareSearch(dataStore.indexName)
                     .setTypes(dataStore.getTypeNames())
@@ -132,10 +131,13 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
 
         SearchHit hit = searchHitIterator.next();
         SimpleFeatureType type = getFeatureType();
+
+
         for (AttributeType attributeType : type.getTypes()) {
             String propertyKey = attributeType.getName().getLocalPart();
             if (hit.getFields().containsKey(propertyKey)) {
                 SearchHitField field = hit.getFields().get(propertyKey);
+
                 if (Point.class.equals(attributeType.getBinding())) {
                     Coordinate coordinate = new Coordinate();
                     Map<String, Object> location = (Map<String, Object>) field.getValue();
@@ -155,6 +157,7 @@ public class ElasticFeatureReader implements FeatureReader<SimpleFeatureType, Si
                 }
             }
         }
+
         return this.buildFeature();
     }
 
